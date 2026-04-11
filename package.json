@@ -1,0 +1,22 @@
+{
+  "name": "swipeat",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "supabase gen types typescript --project-id glxwzswzmqmegrrlxfcx --schema public > packages/types/supabase.ts",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
+    "turbo": "latest"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
