@@ -1,6 +1,7 @@
 import {
   pgTable, uuid, text, boolean,
-  integer, timestamp, jsonb, primaryKey
+  integer, timestamp, jsonb, primaryKey,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {
@@ -38,3 +39,46 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at').defaultNow(),
   matchedAt: timestamp('matched_at'),
 });
+
+export const sessionParticipants = pgTable(
+  'session_participants',
+  {
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    joinedAt: timestamp('joined_at').defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.userId] })],
+);
+
+export const swipes = pgTable(
+  'swipes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sessionId: uuid('session_id')
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').references(() => users.id),
+    dishId: uuid('dish_id').references(() => dishes.id),
+    // 'right' | 'left' | 'up'
+    direction: text('direction'),
+    createdAt: timestamp('created_at').defaultNow(),
+  },
+  (t) => [uniqueIndex('swipes_session_user_dish_idx').on(t.sessionId, t.userId, t.dishId)],
+);
+
+export const wishlist = pgTable(
+  'wishlist',
+  {
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    dishId: uuid('dish_id')
+      .notNull()
+      .references(() => dishes.id),
+    addedAt: timestamp('added_at').defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.dishId] })],
+);
