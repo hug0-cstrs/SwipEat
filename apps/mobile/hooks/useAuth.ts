@@ -4,11 +4,12 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth.store';
 
 export function useAuth() {
-  const { user, session, setSession } = useAuthStore();
+  const { user, session, isInitialized, setSession, setInitialized } = useAuthStore();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setInitialized();
     });
 
     const {
@@ -20,5 +21,5 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  return { user, session, isAuthenticated: !!session };
+  return { user, session, isAuthenticated: !!session, isInitialized };
 }
