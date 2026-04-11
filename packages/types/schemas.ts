@@ -11,5 +11,5 @@ export const CreateSessionSchema = z.object({
   match_mode: z.enum(['majority', 'unanimity']).default('unanimity'),
 });
 
-export type Swipe = z.infer;
-export type CreateSession = z.infer;
+export type Swipe = z.infer<typeof SwipeSchema>;
+export type CreateSession = z.infer<typeof CreateSessionSchema>;
