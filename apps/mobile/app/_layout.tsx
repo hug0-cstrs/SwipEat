@@ -13,8 +13,14 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 
 import { queryClient } from '@/lib/query-client';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function RootLayout() {
+  // Maintenir la souscription onAuthStateChange en vie en permanence.
+  // Sans ça, le layout (app) se démonte en naviguant vers (auth) et perd
+  // la souscription — setSession() n'est plus appelé au login.
+  useAuth();
+
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,

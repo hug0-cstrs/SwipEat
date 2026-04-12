@@ -17,9 +17,11 @@ interface SessionStore {
   swipedIds: Set<string>;
   matchedDish: Dish | null;
   setActiveSession: (session: SwipeSession | null) => void;
+  patchActiveSession: (patch: Partial<SwipeSession>) => void;
   setDeck: (dishes: Dish[]) => void;
   popDeck: () => Dish | undefined;
   addSwiped: (id: string) => void;
+  setSwipedIds: (ids: string[]) => void;
   addParticipant: (participant: Participant) => void;
   setMatch: (dish: Dish) => void;
   reset: () => void;
@@ -38,6 +40,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   setActiveSession: (session) => set({ activeSession: session }),
 
+  patchActiveSession: (patch) =>
+    set((state) => ({
+      activeSession: state.activeSession ? { ...state.activeSession, ...patch } : null,
+    })),
+
   setDeck: (dishes) => set({ deck: dishes }),
 
   popDeck: () => {
@@ -48,6 +55,8 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   addSwiped: (id) =>
     set((state) => ({ swipedIds: new Set([...state.swipedIds, id]) })),
+
+  setSwipedIds: (ids) => set({ swipedIds: new Set(ids) }),
 
   addParticipant: (participant) =>
     set((state) => ({

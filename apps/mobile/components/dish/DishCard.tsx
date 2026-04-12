@@ -1,12 +1,9 @@
 import { Image, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { cssInterop } from 'nativewind';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { Database } from '@swipeat/types';
 import { Badge } from '@/components/ui/Badge';
-
-const StyledGradient = cssInterop(LinearGradient, { className: 'style' });
 
 type Dish = Database['public']['Tables']['dishes']['Row'];
 
@@ -45,12 +42,12 @@ export function DishCard({ dish }: DishCardProps) {
       />
 
       {/* ── Gradient overlay ───────────────────────────────── */}
-      <StyledGradient
+      <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.18)', 'rgba(0,0,0,0.72)', 'rgba(0,0,0,0.88)']}
         locations={[0, 0.35, 0.7, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
-        className="absolute inset-0"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       />
 
       {/* ── Content ─────────────────────────────────────────── */}

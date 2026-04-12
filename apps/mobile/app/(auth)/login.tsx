@@ -13,14 +13,11 @@ import {
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { cssInterop } from 'nativewind';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { supabase } from '@/lib/supabase';
-
-const StyledGradient = cssInterop(LinearGradient, { className: 'style' });
 
 const LoginSchema = z.object({
   email: z.email({ message: 'Adresse email invalide' }),
@@ -191,11 +188,11 @@ export default function LoginScreen() {
               disabled={loginMutation.isPending}
               className="active:opacity-90"
             >
-              <StyledGradient
+              <LinearGradient
                 colors={['#a63300', '#ff7949']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                className="rounded-full h-14 items-center justify-center"
+                style={{ borderRadius: 9999, height: 56, alignItems: 'center', justifyContent: 'center' }}
               >
                 {loginMutation.isPending ? (
                   <ActivityIndicator color="#ffefeb" />
@@ -204,7 +201,7 @@ export default function LoginScreen() {
                     Se connecter
                   </Text>
                 )}
-              </StyledGradient>
+              </LinearGradient>
             </Pressable>
           </View>
 

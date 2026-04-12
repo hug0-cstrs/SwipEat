@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth.store';
@@ -21,6 +22,7 @@ export function useSwipe({ sessionId, filters }: UseSwipeOptions = {}) {
   const { deck, swipedIds, setDeck, popDeck, addSwiped } = useSessionStore();
   const { session } = useAuthStore();
   const { deck: freshDeck, isLoading, isError } = useSwipeDeck(swipedIds, filters);
+  const queryClient = useQueryClient();
 
   // Alimente la pile quand elle est vide et que les données sont prêtes
   useEffect(() => {
@@ -37,28 +39,54 @@ export function useSwipe({ sessionId, filters }: UseSwipeOptions = {}) {
     popDeck();
     addSwiped(dish.id);
 
-    // Hors session : pas d'enregistrement DB
-    if (!sessionId || !session) return;
+    if (!session) return;
 
-    const { error } = await supabase.from('swipes').insert({
-      session_id: sessionId,
-      dish_id: dish.id,
-      direction,
-      user_id: session.user.id,
-    });
+    // Sauvegarder dans la wishlist pour tous les likes/superlikes (avec ou sans session)
+    if (direction === 'right' || direction === 'up') {
+      const { error: wishlistError } = await supabase
+        .from('wishlist')
+        .upsert(
+          { user_id: session.user.id, dish_id: dish.id },
+          { onConflict: 'user_id,dish_id', ignoreDuplicates: true },
+        );
+      if (wishlistError) {
+        console.error('[useSwipe] wishlist insert échoué :', wishlistError.message);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['wishlist', session.user.id] });
+      }
+    }
+
+    // Hors session : pas d'enregistrement des swipes ni de match-check
+    if (!sessionId) return;
+
+    const { error, data: insertedRows } = await supabase
+      .from('swipes')
+      .upsert(
+        { session_id: sessionId, dish_id: dish.id, direction, user_id: session.user.id },
+        { onConflict: 'session_id,user_id,dish_id', ignoreDuplicates: true },
+      )
+      .select('id');
 
     if (error) {
       console.error('[useSwipe] enregistrement swipe échoué :', error.message);
       return;
     }
 
+    // Si ignoreDuplicates a absorbé un doublon, pas besoin de re-vérifier le match
+    if (!insertedRows || insertedRows.length === 0) return;
+
     // Vérifier le match uniquement pour les swipes positifs
     if (direction === 'right' || direction === 'up') {
-      const { error: fnError } = await supabase.functions.invoke('match-check', {
+      const { error: fnError, data: fnData } = await supabase.functions.invoke('match-check', {
         body: { session_id: sessionId, dish_id: dish.id },
       });
       if (fnError) {
-        console.error('[useSwipe] match-check échoué :', fnError.message);
+        // Non-bloquant : le swipe est déjà enregistré, seul le match-check a échoué
+        const httpError = fnError as { message: string; status?: number; context?: { text: () => Promise<string> } };
+        const body = await httpError.context?.text().catch(() => '');
+        console.warn('[useSwipe] match-check échoué :', httpError.status ?? '?', body ?? fnError.message);
+      } else if (fnData && typeof fnData === 'object' && 'error' in fnData) {
+        console.warn('[useSwipe] match-check erreur :', (fnData as { error: string }).error);
       }
     }
   }

@@ -1,13 +1,30 @@
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { Tabs, Redirect } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useSessionStore } from '@/stores/session.store';
+import { useSessionRealtime } from '@/hooks/useSessionRealtime';
+import { useRestoreSession } from '@/hooks/useSession';
 
 type IconProps = { color: string; size: number };
 
 export default function AppLayout() {
   const { isAuthenticated, isInitialized } = useAuth();
+  const { activeSession } = useSessionStore();
+  useRestoreSession();
+  useSessionRealtime(activeSession?.id ?? null);
+  const { bottom } = useSafeAreaInsets();
+
+  // Utiliser useEffect pour la redirection évite de démonter l'écran de login
+  // pendant que onAuthStateChange met à jour le store (race condition).
+  useEffect(() => {
+    if (isInitialized && !isAuthenticated) {
+      router.replace('/(auth)/login');
+    }
+  }, [isAuthenticated, isInitialized]);
 
   if (!isInitialized) {
     return (
@@ -18,7 +35,7 @@ export default function AppLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Redirect href="/(auth)/login" />;
+    return null;
   }
 
   return (
@@ -31,8 +48,8 @@ export default function AppLayout() {
           backgroundColor: '#f6f6f5',
           borderTopColor: '#e7e8e7',
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + bottom,
+          paddingBottom: 8 + bottom,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
@@ -86,11 +103,12 @@ export default function AppLayout() {
           ),
         }}
       />
-      {/* match est un écran modal, pas un onglet */}
+      {/* match est un écran modal, pas un onglet — caché de la tab bar */}
       <Tabs.Screen
         name="match"
         options={{
-          href: null,
+          tabBarButton: () => null,
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

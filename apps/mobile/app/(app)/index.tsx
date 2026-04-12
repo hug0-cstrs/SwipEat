@@ -4,10 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { useSwipe } from '@/hooks/useSwipe';
+import { useSessionStore } from '@/stores/session.store';
 import { SwipeCard } from '@/components/dish/SwipeCard';
 
 export default function HomeScreen() {
-  const { deck, isLoading, isError, handleSwipe } = useSwipe();
+  const { activeSession } = useSessionStore();
+  // Les swipes sont enregistrés dès qu'une session existe, même en "waiting".
+  // Quand le partenaire rejoint et swipe le même plat → match détecté.
+  const { deck, isLoading, isError, handleSwipe } = useSwipe({ sessionId: activeSession?.id });
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top']}>
@@ -19,7 +23,13 @@ export default function HomeScreen() {
           onPress={() => router.push('/(app)/session')}
           className="bg-surface-container-low rounded-full p-2 active:opacity-70"
         >
-          <Ionicons name="people-outline" size={22} color="#5a5c5b" />
+          <Ionicons name="people-outline" size={22} color={activeSession ? '#a63300' : '#5a5c5b'} />
+          {activeSession && (
+            <View
+              className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: activeSession.status === 'active' ? '#22C55E' : '#F59E0B' }}
+            />
+          )}
         </Pressable>
       </View>
 
