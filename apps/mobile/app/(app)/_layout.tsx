@@ -56,6 +56,13 @@ export default function AppLayout() {
           fontFamily: 'PlusJakartaSans_600SemiBold',
           fontSize: 10,
         },
+        tabBarContentContainerStyle: {
+          justifyContent: 'center',
+        },
+        tabBarItemStyle: {
+          flex: 0,
+          width: 68,
+        },
       }}
     >
       <Tabs.Screen
