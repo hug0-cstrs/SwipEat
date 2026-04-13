@@ -130,35 +130,20 @@ export function useJoinSession() {
         .from('session_participants')
         .insert({ session_id: foundSession.id, user_id: userId });
 
-      if (joinError) {
-        if (joinError.code === '23505') throw new Error('Tu participes déjà à cette session.');
+      if (joinError && joinError.code !== '23505') {
+        // 23505 = doublon (déjà participant) → on continue sans erreur
         throw new Error(joinError.message);
       }
 
-      // Passer la session en 'active' (duo complet)
-      const { data: updatedSession } = await supabase
+      // Re-fetch pour obtenir le statut post-trigger (le trigger `on_participant_joined`
+      // passe la session en 'active' dès que 2 participants sont insérés).
+      const { data: latestSession } = await supabase
         .from('sessions')
-        .update({ status: 'active' })
+        .select('*')
         .eq('id', foundSession.id)
-        .eq('owner_id', foundSession.owner_id ?? '') // la policy exige owner_id
-        .select()
         .single();
 
-      // Broadcaster l'événement user_joined pour notifier le owner
-      const userName = (session!.user.user_metadata?.name as string | undefined)
-        ?? session!.user.email?.split('@')[0]
-        ?? 'Participant';
-
-      const channel = supabase.channel(`session:${foundSession.id}`);
-      await channel.send({
-        type: 'broadcast',
-        event: 'user_joined',
-        payload: { user: { id: userId, name: userName } },
-      });
-      await supabase.removeChannel(channel);
-
-      // Si l'update échoue (non-owner), on retourne quand même la session found
-      return (updatedSession as SwipeSession) ?? (foundSession as SwipeSession);
+      return (latestSession ?? foundSession) as SwipeSession;
     },
     onSuccess: (joinedSession) => {
       setActiveSession(joinedSession);
@@ -179,21 +164,13 @@ export function useCloseSession() {
 
       const isOwner = activeSession.owner_id === session?.user.id;
 
-      // Si owner : fermer la session et notifier les autres participants
+      // Si owner : fermer la session
+      // La notification aux autres participants arrive via postgres_changes (migration 0004).
       if (isOwner) {
         await supabase
           .from('sessions')
           .update({ status: 'closed' })
           .eq('id', activeSession.id);
-
-        // Broadcaster session_closed pour notifier les participants non-owner
-        const channel = supabase.channel(`session:${activeSession.id}`);
-        await channel.send({
-          type: 'broadcast',
-          event: 'session_closed',
-          payload: {},
-        });
-        await supabase.removeChannel(channel);
       }
 
       // Supprimer la participation
@@ -207,6 +184,35 @@ export function useCloseSession() {
       queryClient.removeQueries({ queryKey: ['session', activeSession?.id] });
       setActiveSession(null);
       reset();
+    },
+  });
+}
+
+// ── Mutation : reprendre les swipes après un match ──────────
+/**
+ * Remet la session en status 'active' pour permettre de nouveaux matchs.
+ * Doit être appelé quand l'utilisateur veut continuer à swiper après un match.
+ * L'autre participant recevra le changement via postgres_changes et sera
+ * automatiquement redirigé vers le deck depuis useSessionRealtime.
+ */
+export function useResumeSession() {
+  const { activeSession, clearMatch } = useSessionStore();
+  const queryClient = useQueryClient();
+
+  return useMutation<void, Error, void>({
+    mutationFn: async (): Promise<void> => {
+      if (!activeSession) return;
+
+      const { error } = await supabase
+        .from('sessions')
+        .update({ status: 'active', match_dish_id: null, matched_at: null })
+        .eq('id', activeSession.id);
+
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      clearMatch();
+      queryClient.invalidateQueries({ queryKey: ['session', activeSession?.id] });
     },
   });
 }
@@ -248,7 +254,8 @@ export function useRestoreSession(): void {
           const s = row.sessions as SwipeSession | null;
           return s ? [s] : [];
         })
-        .find((s) => s.status === 'waiting' || s.status === 'active');
+        // 'matched' inclus pour restaurer après un match si l'app est relancée
+        .find((s) => s.status === 'waiting' || s.status === 'active' || s.status === 'matched');
 
       if (!found) return;
 

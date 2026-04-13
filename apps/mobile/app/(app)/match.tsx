@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 
 import { useSessionStore } from '@/stores/session.store';
+import { useResumeSession } from '@/hooks/useSession';
 
 // ── Particule de célébration ──────────────────────────────────
 interface ConfettiParticleProps {
@@ -96,6 +97,7 @@ const CONFETTI_PARTICLES: ConfettiParticleProps[] = [
 // ── Écran principal ───────────────────────────────────────────
 export default function MatchScreen() {
   const { matchedDish } = useSessionStore();
+  const resumeSession = useResumeSession();
 
   const cardScale = useSharedValue(0);
   const cardOpacity = useSharedValue(0);
@@ -135,11 +137,16 @@ export default function MatchScreen() {
     opacity: buttonsOpacity.value,
   }));
 
-  // Sécurité : si on arrive ici sans matchedDish, rediriger
-  if (!matchedDish) {
-    router.replace('/(app)');
-    return null;
-  }
+  // Sécurité : si on arrive ici sans matchedDish (ou après clearMatch), rediriger.
+  // Le useEffect déclenche la navigation ; le guard `if (!matchedDish) return null`
+  // empêche le render de planter pendant le cycle entre clearMatch() et la navigation.
+  useEffect(() => {
+    if (!matchedDish) {
+      router.replace('/(app)');
+    }
+  }, [matchedDish]);
+
+  if (!matchedDish) return null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={['top', 'bottom']}>
@@ -234,9 +241,14 @@ export default function MatchScreen() {
           style={[{ width: '100%', maxWidth: 320, marginTop: 32, gap: 12 }, buttonsStyle]}
         >
           <Pressable
-            onPress={() => router.replace('/(app)')}
+            onPress={() => {
+              resumeSession.mutate(undefined, {
+                onSuccess: () => router.replace('/(app)'),
+              });
+            }}
+            disabled={resumeSession.isPending}
             className="rounded-full h-14 items-center justify-center active:opacity-80"
-            style={{ backgroundColor: '#a63300' }}
+            style={{ backgroundColor: '#a63300', opacity: resumeSession.isPending ? 0.6 : 1 }}
           >
             <Text className="font-jakarta-bold text-base text-on-primary">
               Continuer à swiper
@@ -244,7 +256,12 @@ export default function MatchScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.replace('/(app)/session')}
+            onPress={() => {
+              resumeSession.mutate(undefined, {
+                onSuccess: () => router.replace('/(app)/session'),
+              });
+            }}
+            disabled={resumeSession.isPending}
             className="rounded-full h-12 items-center justify-center border border-outline-variant active:opacity-70"
           >
             <Text className="font-jakarta-semibold text-sm text-on-surface">

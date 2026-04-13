@@ -40,10 +40,12 @@ serve(async (req) => {
       );
     }
 
-    // Session déjà terminée : pas besoin de vérifier
-    if (session.status === 'matched' || session.status === 'closed') {
+    // Session fermée définitivement : pas besoin de vérifier
+    // Note : on autorise délibérément le statut 'matched' pour permettre
+    // plusieurs matchs consécutifs dans la même session (après "Continuer à swiper").
+    if (session.status === 'closed') {
       return new Response(
-        JSON.stringify({ match: false, reason: 'session already ended' }),
+        JSON.stringify({ match: false, reason: 'session closed' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
@@ -105,14 +107,9 @@ serve(async (req) => {
 
     if (updateError) throw new Error(updateError.message);
 
-    // Broadcaster l'événement match via Realtime
-    const channel = supabase.channel(`session:${session_id}`);
-    await channel.send({
-      type: 'broadcast',
-      event: 'match',
-      payload: { dish_id, dish },
-    });
-    await supabase.removeChannel(channel);
+    // La notification des clients se fait automatiquement via postgres_changes
+    // (Realtime DB sur la table sessions). Plus fiable que le broadcast WebSocket
+    // depuis une Edge Function (connexion WS trop courte pour le cycle Deno).
 
     return new Response(
       JSON.stringify({ match: true, dish }),
