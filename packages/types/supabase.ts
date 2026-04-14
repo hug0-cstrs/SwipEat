@@ -62,6 +62,42 @@ export type Database = {
         }
         Relationships: []
       }
+      session_matches: {
+        Row: {
+          dish_id: string
+          id: string
+          matched_at: string
+          session_id: string
+        }
+        Insert: {
+          dish_id: string
+          id?: string
+          matched_at?: string
+          session_id: string
+        }
+        Update: {
+          dish_id?: string
+          id?: string
+          matched_at?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_matches_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_matches_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_participants: {
         Row: {
           joined_at: string | null

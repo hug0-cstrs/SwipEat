@@ -87,6 +87,9 @@ export function useSessionRealtime(sessionId: string | null): void {
             patchActiveSession({ status: 'matched' });
             setMatch(dish as Dish);
             queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
+            // Invalider l'historique et les matchs pour que le nouveau match apparaisse immédiatement
+            queryClient.invalidateQueries({ queryKey: ['session-history', authSession?.user.id] });
+            queryClient.invalidateQueries({ queryKey: ['match-history', authSession?.user.id] });
             router.push('/(app)/match');
             return;
           }
@@ -96,6 +99,7 @@ export function useSessionRealtime(sessionId: string | null): void {
             setActiveSession(null);
             reset();
             queryClient.removeQueries({ queryKey: ['session', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['session-history', authSession?.user.id] });
             router.replace('/(app)/session');
           }
         },

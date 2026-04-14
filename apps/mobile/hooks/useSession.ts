@@ -18,6 +18,16 @@ export interface SessionHistoryItem {
   participantNames: string[];
 }
 
+export interface MatchHistoryItem {
+  id: string;
+  session_id: string;
+  matched_at: string;
+  dishName: string;
+  dishImage: string | null;
+  sessionCode: string;
+  participantNames: string[];
+}
+
 type SwipeSession = Database['public']['Tables']['sessions']['Row'];
 
 export interface SessionParticipant {
@@ -215,9 +225,12 @@ export function useResumeSession() {
     mutationFn: async (): Promise<void> => {
       if (!activeSession) return;
 
+      // On remet uniquement le status à 'active'.
+      // match_dish_id et matched_at sont conservés en DB pour que l'historique
+      // des matchs reste consultable même après avoir continué à swiper.
       const { error } = await supabase
         .from('sessions')
-        .update({ status: 'active', match_dish_id: null, matched_at: null })
+        .update({ status: 'active' })
         .eq('id', activeSession.id);
 
       if (error) throw new Error(error.message);
@@ -349,6 +362,59 @@ export function useSessionHistory() {
     queryKey: ['session-history', userId],
     queryFn: () => fetchSessionHistory(userId),
     enabled: !!userId,
-    staleTime: 30 * 1000,
+    staleTime: 0, // Toujours considéré périmé → refetch à chaque navigation sur l'onglet
+  });
+}
+
+// ── Query : historique des matchs (un match par entrée) ──────
+async function fetchMatchHistory(): Promise<MatchHistoryItem[]> {
+  const { data, error } = await supabase
+    .from('session_matches')
+    .select(`
+      id,
+      session_id,
+      matched_at,
+      dish:dish_id ( name, image_url ),
+      session:session_id (
+        code,
+        session_participants ( users ( name ) )
+      )
+    `)
+    .order('matched_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row) => {
+    const dish = row.dish as { name: string; image_url: string | null } | null;
+    const session = row.session as {
+      code: string;
+      session_participants: Array<{ users: { name: string } | null }> | null;
+    } | null;
+
+    const participantNames = (session?.session_participants ?? [])
+      .map((p) => p.users?.name ?? 'Inconnu')
+      .filter(Boolean);
+
+    return {
+      id: row.id,
+      session_id: row.session_id,
+      matched_at: row.matched_at,
+      dishName: dish?.name ?? 'Plat inconnu',
+      dishImage: dish?.image_url ?? null,
+      sessionCode: session?.code ?? '',
+      participantNames,
+    };
+  });
+}
+
+export function useMatchHistory() {
+  const { session } = useAuthStore();
+  const userId = session?.user.id ?? '';
+
+  return useQuery<MatchHistoryItem[], Error>({
+    queryKey: ['match-history', userId],
+    queryFn: fetchMatchHistory,
+    enabled: !!userId,
+    staleTime: 0,
   });
 }

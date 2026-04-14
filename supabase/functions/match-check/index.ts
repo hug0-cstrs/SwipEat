@@ -95,17 +95,30 @@ serve(async (req) => {
 
     if (dishError || !dish) throw new Error('Plat introuvable');
 
+    const matchedAt = new Date().toISOString();
+
     // Mettre à jour la session : status → 'matched', match_dish_id, matched_at
     const { error: updateError } = await supabase
       .from('sessions')
       .update({
         status: 'matched',
         match_dish_id: dish_id,
-        matched_at: new Date().toISOString(),
+        matched_at: matchedAt,
       })
       .eq('id', session_id);
 
     if (updateError) throw new Error(updateError.message);
+
+    // Historiser le match dans session_matches (tous les matchs, pas seulement le dernier)
+    const { error: matchInsertError } = await supabase
+      .from('session_matches')
+      .insert({ session_id, dish_id, matched_at: matchedAt });
+
+    if (matchInsertError) {
+      // Non-bloquant : la session est déjà mise à jour, le realtime a été déclenché.
+      // On log sans faire échouer la réponse.
+      console.error('[match-check] session_matches insert failed:', matchInsertError.message);
+    }
 
     // La notification des clients se fait automatiquement via postgres_changes
     // (Realtime DB sur la table sessions). Plus fiable que le broadcast WebSocket

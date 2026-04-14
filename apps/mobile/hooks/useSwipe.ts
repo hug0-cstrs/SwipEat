@@ -77,8 +77,16 @@ export function useSwipe({ sessionId, filters }: UseSwipeOptions = {}) {
 
     // Vérifier le match uniquement pour les swipes positifs
     if (direction === 'right' || direction === 'up') {
+      // Récupérer le JWT frais depuis la session courante.
+      // supabase.functions.invoke() ne transmet pas toujours le token automatiquement
+      // en v2.46.x → on le passe explicitement pour éviter les erreurs 401 "Invalid JWT".
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+
       const { error: fnError, data: fnData } = await supabase.functions.invoke('match-check', {
         body: { session_id: sessionId, dish_id: dish.id },
+        headers: currentSession?.access_token
+          ? { Authorization: `Bearer ${currentSession.access_token}` }
+          : undefined,
       });
       if (fnError) {
         // Non-bloquant : le swipe est déjà enregistré, seul le match-check a échoué
