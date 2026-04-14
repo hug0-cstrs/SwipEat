@@ -33,18 +33,6 @@ async function fetchDishes(filters?: DishFilters): Promise<Dish[]> {
   return data;
 }
 
-/** Mélange un tableau de façon déterministe à partir d'une seed (Fisher-Yates). */
-function shuffleWithSeed<T>(arr: T[], seed: number): T[] {
-  const result = [...arr];
-  let s = seed;
-  for (let i = result.length - 1; i > 0; i--) {
-    s = (s * 1664525 + 1013904223) & 0xffffffff;
-    const j = Math.abs(s) % (i + 1);
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
-
 /**
  * Retourne tous les plats correspondant aux filtres optionnels.
  * Les données sont mises en cache par TanStack Query.
@@ -58,9 +46,9 @@ export function useDishes(filters?: DishFilters) {
 }
 
 /**
- * Variante pour le swipe deck : retourne les plats mélangés de façon
- * stable entre les re-renders (seed = date du jour).
- * Exclut les plats déjà swipés passés en paramètre.
+ * Variante pour le swipe deck : retourne les plats filtrés (exclut les déjà swipés).
+ * Le mélange aléatoire est délégué à useSwipe pour n'être appliqué qu'une seule fois
+ * au moment où la pile est initialisée.
  */
 export function useSwipeDeck(
   swipedIds: Set<string>,
@@ -68,12 +56,9 @@ export function useSwipeDeck(
 ) {
   const query = useDishes(filters);
 
-  const deck = (() => {
-    if (query.data === undefined) return [];
-    const seed = Math.floor(Date.now() / 86_400_000); // change chaque jour
-    const shuffled = shuffleWithSeed(query.data, seed);
-    return shuffled.filter((d) => !swipedIds.has(d.id));
-  })();
+  const deck = query.data === undefined
+    ? []
+    : query.data.filter((d) => !swipedIds.has(d.id));
 
   return { ...query, deck };
 }

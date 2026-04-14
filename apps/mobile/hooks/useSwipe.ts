@@ -12,6 +12,16 @@ interface UseSwipeOptions {
   filters?: DishFilters;
 }
 
+/** Fisher-Yates shuffle avec Math.random() — ordre différent à chaque initialisation du deck. */
+function shuffleDeck<T>(arr: T[]): T[] {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j]!, result[i]!];
+  }
+  return result;
+}
+
 /**
  * Gère la pile de swipe :
  * - Charge les plats depuis Supabase (via useSwipeDeck)
@@ -24,10 +34,11 @@ export function useSwipe({ sessionId, filters }: UseSwipeOptions = {}) {
   const { deck: freshDeck, isLoading, isError } = useSwipeDeck(swipedIds, filters);
   const queryClient = useQueryClient();
 
-  // Alimente la pile quand elle est vide et que les données sont prêtes
+  // Alimente la pile quand elle est vide et que les données sont prêtes.
+  // shuffleDeck() applique un ordre aléatoire différent à chaque initialisation.
   useEffect(() => {
     if (deck.length === 0 && freshDeck.length > 0) {
-      setDeck(freshDeck);
+      setDeck(shuffleDeck(freshDeck));
     }
   }, [freshDeck, deck.length, setDeck]);
 

@@ -58,7 +58,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   addSwiped: (id) =>
     set((state) => ({ swipedIds: new Set([...state.swipedIds, id]) })),
 
-  setSwipedIds: (ids) => set({ swipedIds: new Set(ids) }),
+  setSwipedIds: (ids) => {
+    const idSet = new Set(ids);
+    set((state) => ({
+      swipedIds: idSet,
+      // Filtrer le deck existant si des plats y figurent déjà (timing race entre
+      // le chargement de la wishlist et l'initialisation du deck).
+      deck: state.deck.filter((d) => !idSet.has(d.id)),
+    }));
+  },
 
   addParticipant: (participant) =>
     set((state) => ({

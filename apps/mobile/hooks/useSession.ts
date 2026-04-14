@@ -282,7 +282,19 @@ export function useRestoreSession(): void {
         // 'matched' inclus pour restaurer après un match si l'app est relancée
         .find((s) => s.status === 'waiting' || s.status === 'active' || s.status === 'matched');
 
-      if (!found) return;
+      if (!found) {
+        // Pas de session active : restaurer les swipedIds depuis la wishlist
+        // pour que les plats déjà likés ne réapparaissent pas dans le deck.
+        const { data: wishlistData } = await supabase
+          .from('wishlist')
+          .select('dish_id')
+          .eq('user_id', userId);
+
+        if (wishlistData && wishlistData.length > 0) {
+          setSwipedIds(wishlistData.map((w) => w.dish_id));
+        }
+        return;
+      }
 
       setActiveSession(found);
 
