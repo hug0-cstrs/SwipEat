@@ -82,6 +82,9 @@ export function useSessionRealtime(sessionId: string | null): void {
               return;
             }
 
+            // Marquer la session comme matchée dans le store local pour que
+            // le check `prevStatus === 'matched'` fonctionne lors du retour en 'active'.
+            patchActiveSession({ status: 'matched' });
             setMatch(dish as Dish);
             queryClient.invalidateQueries({ queryKey: ['session', sessionId] });
             router.push('/(app)/match');

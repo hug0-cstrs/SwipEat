@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/auth.store';
+import { useSessionStore } from '@/stores/session.store';
 import type { Database } from '@swipeat/types';
 
 type Dish = Database['public']['Tables']['dishes']['Row'];
@@ -42,18 +43,36 @@ export function useWishlist() {
 
 export function useRemoveFromWishlist() {
   const { session } = useAuthStore();
+  const { activeSession, removeSwipedId } = useSessionStore();
   const queryClient = useQueryClient();
 
   return useMutation<void, Error, string>({
     mutationFn: async (dishId: string): Promise<void> => {
+      // 1. Supprimer de la wishlist
       const { error } = await supabase
         .from('wishlist')
         .delete()
         .eq('user_id', session!.user.id)
         .eq('dish_id', dishId);
       if (error) throw new Error(error.message);
+
+      // 2. Supprimer le swipe correspondant dans la session active
+      //    → le plat réapparaîtra dans le deck et pourra être re-swiped
+      if (activeSession) {
+        await supabase
+          .from('swipes')
+          .delete()
+          .eq('session_id', activeSession.id)
+          .eq('user_id', session!.user.id)
+          .eq('dish_id', dishId);
+        // Pas de throw : best-effort, la wishlist est déjà supprimée
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_void, dishId) => {
+      // Retirer du store swipedIds → le plat réapparaît immédiatement dans le deck
+      if (activeSession) {
+        removeSwipedId(dishId);
+      }
       queryClient.invalidateQueries({ queryKey: ['wishlist', session?.user.id] });
     },
     onError: (error) => {

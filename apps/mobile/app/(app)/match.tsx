@@ -96,7 +96,7 @@ const CONFETTI_PARTICLES: ConfettiParticleProps[] = [
 
 // ── Écran principal ───────────────────────────────────────────
 export default function MatchScreen() {
-  const { matchedDish } = useSessionStore();
+  const { matchedDish, clearMatch } = useSessionStore();
   const resumeSession = useResumeSession();
 
   const cardScale = useSharedValue(0);
@@ -137,14 +137,16 @@ export default function MatchScreen() {
     opacity: buttonsOpacity.value,
   }));
 
-  // Sécurité : si on arrive ici sans matchedDish (ou après clearMatch), rediriger.
-  // Le useEffect déclenche la navigation ; le guard `if (!matchedDish) return null`
-  // empêche le render de planter pendant le cycle entre clearMatch() et la navigation.
+  // Garde de montage : si on arrive ici sans plat (navigation directe ou bug),
+  // retourner au deck. On vérifie uniquement au montage — la navigation
+  // post-match est gérée explicitement dans les handlers des boutons ci-dessous,
+  // et la redirection de l'autre participant est gérée par useSessionRealtime.
   useEffect(() => {
     if (!matchedDish) {
       router.replace('/(app)');
     }
-  }, [matchedDish]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intentionnellement sans matchedDish en dépendance
 
   if (!matchedDish) return null;
 
@@ -242,13 +244,15 @@ export default function MatchScreen() {
         >
           <Pressable
             onPress={() => {
-              resumeSession.mutate(undefined, {
-                onSuccess: () => router.replace('/(app)'),
-              });
+              // clearMatch() d'abord : activeSession.status passe à 'active' localement.
+              // Quand le realtime arrive, prevStatus sera déjà 'active' → pas de
+              // redirection parasite vers '/(app)' par useSessionRealtime.
+              clearMatch();
+              router.replace('/(app)');
+              resumeSession.mutate(); // Met à jour la DB en arrière-plan
             }}
-            disabled={resumeSession.isPending}
             className="rounded-full h-14 items-center justify-center active:opacity-80"
-            style={{ backgroundColor: '#a63300', opacity: resumeSession.isPending ? 0.6 : 1 }}
+            style={{ backgroundColor: '#a63300' }}
           >
             <Text className="font-jakarta-bold text-base text-on-primary">
               Continuer à swiper
@@ -257,11 +261,10 @@ export default function MatchScreen() {
 
           <Pressable
             onPress={() => {
-              resumeSession.mutate(undefined, {
-                onSuccess: () => router.replace('/(app)/session'),
-              });
+              clearMatch();
+              router.replace('/(app)/session');
+              resumeSession.mutate();
             }}
-            disabled={resumeSession.isPending}
             className="rounded-full h-12 items-center justify-center border border-outline-variant active:opacity-70"
           >
             <Text className="font-jakarta-semibold text-sm text-on-surface">

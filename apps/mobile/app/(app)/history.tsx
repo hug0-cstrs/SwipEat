@@ -1,83 +1,16 @@
-import { FlatList, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 
-import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/auth.store';
 import { useSessionStore } from '@/stores/session.store';
+import { useSessionHistory, type SessionHistoryItem } from '@/hooks/useSession';
 
-// ── Types ─────────────────────────────────────────────────────
-interface SessionHistoryItem {
-  id: string;
-  code: string;
-  status: string;
-  created_at: string;
-  matched_at: string | null;
-  matchedDishName: string | null;
-  matchedDishImage: string | null;
-}
-
-// ── Query ─────────────────────────────────────────────────────
-async function fetchSessionHistory(userId: string): Promise<SessionHistoryItem[]> {
-  // Récupérer les sessions où l'utilisateur a participé (terminées ou matchées)
-  const { data, error } = await supabase
-    .from('session_participants')
-    .select(`
-      sessions (
-        id,
-        code,
-        status,
-        created_at,
-        matched_at,
-        dishes:match_dish_id ( name, image_url )
-      )
-    `)
-    .eq('user_id', userId);
-
-  if (error) throw new Error(error.message);
-
-  return (data ?? [])
-    .flatMap((row) => {
-      const s = row.sessions as {
-        id: string;
-        code: string;
-        status: string;
-        created_at: string;
-        matched_at: string | null;
-        dishes: { name: string; image_url: string } | null;
-      } | null;
-
-      if (!s) return [];
-
-      return [{
-        id: s.id,
-        code: s.code,
-        status: s.status,
-        created_at: s.created_at,
-        matched_at: s.matched_at,
-        matchedDishName: s.dishes?.name ?? null,
-        matchedDishImage: s.dishes?.image_url ?? null,
-      }];
-    })
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-}
-
-function useSessionHistory(userId: string) {
-  return useQuery<SessionHistoryItem[], Error>({
-    queryKey: ['session-history', userId],
-    queryFn: () => fetchSessionHistory(userId),
-    enabled: !!userId,
-    staleTime: 30 * 1000,
-  });
-}
-
-// ── Composant item ────────────────────────────────────────────
+// ── Badge de statut ───────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { label: string; bg: string; text: string }> = {
-    matched:  { label: 'Matchée',   bg: '#dcfce7', text: '#15803d' },
-    closed:   { label: 'Terminée',  bg: '#fee2e2', text: '#b91c1c' },
-    active:   { label: 'Active',    bg: '#dbeafe', text: '#1d4ed8' },
+    matched:  { label: 'Matchée',    bg: '#dcfce7', text: '#15803d' },
+    closed:   { label: 'Terminée',   bg: '#fee2e2', text: '#b91c1c' },
+    active:   { label: 'Active',     bg: '#dbeafe', text: '#1d4ed8' },
     waiting:  { label: 'En attente', bg: '#fef9c3', text: '#854d0e' },
   };
   const { label, bg, text } = config[status] ?? { label: status, bg: '#f3f4f6', text: '#374151' };
@@ -91,9 +24,14 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Ligne d'historique ────────────────────────────────────────
 function HistoryRow({ item }: { item: SessionHistoryItem }) {
   const date = new Date(item.created_at);
-  const formattedDate = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  const formattedDate = date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 
   return (
     <View
@@ -108,7 +46,17 @@ function HistoryRow({ item }: { item: SessionHistoryItem }) {
         <StatusBadge status={item.status} />
       </View>
 
-      {/* Ligne 2 : date */}
+      {/* Ligne 2 : participants */}
+      {item.participantNames.length > 0 && (
+        <View className="flex-row items-center" style={{ gap: 6 }}>
+          <Ionicons name="people-outline" size={13} color="#acadac" />
+          <Text className="font-jakarta text-xs text-on-surface-variant">
+            {item.participantNames.join(' · ')}
+          </Text>
+        </View>
+      )}
+
+      {/* Ligne 3 : date */}
       <View className="flex-row items-center" style={{ gap: 4 }}>
         <Ionicons name="calendar-outline" size={13} color="#acadac" />
         <Text className="font-jakarta text-xs text-on-surface-variant">{formattedDate}</Text>
@@ -136,10 +84,8 @@ function HistoryRow({ item }: { item: SessionHistoryItem }) {
 
 // ── Écran ─────────────────────────────────────────────────────
 export default function HistoryScreen() {
-  const { session } = useAuthStore();
   const { activeSession } = useSessionStore();
-  const userId = session?.user.id ?? '';
-  const { data: history, isLoading, isError } = useSessionHistory(userId);
+  const { data: history, isLoading, isError } = useSessionHistory();
 
   // Exclure la session active de l'historique
   const pastSessions = (history ?? []).filter((s) => s.id !== activeSession?.id);
@@ -153,7 +99,7 @@ export default function HistoryScreen() {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <Text className="font-jakarta text-sm text-on-surface-variant">Chargement…</Text>
+          <ActivityIndicator size="small" color="#a63300" />
         </View>
       ) : isError ? (
         <View className="flex-1 items-center justify-center px-8">

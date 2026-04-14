@@ -25,6 +25,7 @@ interface SessionStore {
   addParticipant: (participant: Participant) => void;
   setMatch: (dish: Dish) => void;
   clearMatch: () => void;
+  removeSwipedId: (id: string) => void;
   reset: () => void;
 }
 
@@ -73,6 +74,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         ? { ...state.activeSession, status: 'active' as const, match_dish_id: null, matched_at: null }
         : null,
     })),
+
+  removeSwipedId: (id) =>
+    set((state) => {
+      const next = new Set(state.swipedIds);
+      next.delete(id);
+      return { swipedIds: next };
+    }),
 
   reset: () => set(initialState),
 }));

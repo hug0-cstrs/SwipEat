@@ -6,6 +6,18 @@ import { useAuthStore } from '@/stores/auth.store';
 import { useSessionStore } from '@/stores/session.store';
 import type { Database } from '@swipeat/types';
 
+// ── Types publics partagés ───────────────────────────────────
+export interface SessionHistoryItem {
+  id: string;
+  code: string;
+  status: string;
+  created_at: string;
+  matched_at: string | null;
+  matchedDishName: string | null;
+  matchedDishImage: string | null;
+  participantNames: string[];
+}
+
 type SwipeSession = Database['public']['Tables']['sessions']['Row'];
 
 export interface SessionParticipant {
@@ -276,4 +288,67 @@ export function useRestoreSession(): void {
   // Dépendance sur user.id uniquement : on ne veut pas relancer si activeSession change
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user.id]);
+}
+
+// ── Query : historique des sessions de l'utilisateur ────────
+async function fetchSessionHistory(userId: string): Promise<SessionHistoryItem[]> {
+  const { data, error } = await supabase
+    .from('session_participants')
+    .select(`
+      sessions (
+        id,
+        code,
+        status,
+        created_at,
+        matched_at,
+        dishes:match_dish_id ( name, image_url ),
+        session_participants ( users ( name ) )
+      )
+    `)
+    .eq('user_id', userId);
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? [])
+    .flatMap((row) => {
+      const s = row.sessions as {
+        id: string;
+        code: string;
+        status: string;
+        created_at: string;
+        matched_at: string | null;
+        dishes: { name: string; image_url: string } | null;
+        session_participants: Array<{ users: { name: string } | null }> | null;
+      } | null;
+
+      if (!s) return [];
+
+      const participantNames = (s.session_participants ?? [])
+        .map((p) => p.users?.name ?? 'Inconnu')
+        .filter(Boolean);
+
+      return [{
+        id: s.id,
+        code: s.code,
+        status: s.status,
+        created_at: s.created_at,
+        matched_at: s.matched_at,
+        matchedDishName: s.dishes?.name ?? null,
+        matchedDishImage: s.dishes?.image_url ?? null,
+        participantNames,
+      }];
+    })
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+export function useSessionHistory() {
+  const { session } = useAuthStore();
+  const userId = session?.user.id ?? '';
+
+  return useQuery<SessionHistoryItem[], Error>({
+    queryKey: ['session-history', userId],
+    queryFn: () => fetchSessionHistory(userId),
+    enabled: !!userId,
+    staleTime: 30 * 1000,
+  });
 }
